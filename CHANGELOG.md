@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0 (2026-03-28)
+
+- Add token revocation/blacklist support via `is_revoked` callback in `verify_token()`
+- Add `TokenRevokedError` exception raised when a revoked token is detected
+- Add `include_jti` parameter to `create_token()` for automatic JTI generation (UUID4)
+- Add `decode_unverified()` function returning both header and payload without signature validation
+
 ## 0.2.0 (2026-03-27)
 
 - Add `validators` parameter to `verify_token()` for custom claims validation

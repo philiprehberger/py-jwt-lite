@@ -3,19 +3,21 @@
 from __future__ import annotations
 
 import base64
-import hashlib
 import hmac
 import json
 import time
+import uuid
 from typing import Any, Callable
 
 __all__ = [
     "create_token",
     "verify_token",
     "decode_token",
+    "decode_unverified",
     "refresh_token",
     "ExpiredTokenError",
     "InvalidTokenError",
+    "TokenRevokedError",
 ]
 
 _ALGORITHMS = {"HS256": "sha256", "HS384": "sha384", "HS512": "sha512"}
@@ -27,6 +29,10 @@ class ExpiredTokenError(Exception):
 
 class InvalidTokenError(Exception):
     """Raised when a token's signature is invalid or the token is malformed."""
+
+
+class TokenRevokedError(Exception):
+    """Raised when a token has been revoked."""
 
 
 def _b64url_encode(data: bytes) -> str:
@@ -47,6 +53,7 @@ def create_token(
     secret: str,
     algorithm: str = "HS256",
     expires_in: int | float | None = None,
+    include_jti: bool = False,
 ) -> str:
     """Create a signed JWT token.
 
@@ -55,6 +62,7 @@ def create_token(
         secret: Shared secret used for HMAC signing.
         algorithm: Signing algorithm (HS256, HS384, or HS512).
         expires_in: Optional expiration time in seconds from now.
+        include_jti: If True, automatically adds a ``jti`` claim with a UUID4 value.
 
     Returns:
         A signed JWT string.
@@ -66,9 +74,13 @@ def create_token(
         raise ValueError(f"Unsupported algorithm: {algorithm}")
 
     header = {"alg": algorithm, "typ": "JWT"}
+    payload = {**payload}
+
+    if include_jti:
+        payload["jti"] = str(uuid.uuid4())
 
     if expires_in is not None:
-        payload = {**payload, "exp": time.time() + expires_in}
+        payload["exp"] = time.time() + expires_in
 
     header_b64 = _b64url_encode(json.dumps(header, separators=(",", ":")).encode())
     payload_b64 = _b64url_encode(json.dumps(payload, separators=(",", ":")).encode())
@@ -89,6 +101,7 @@ def verify_token(
     secret: str,
     algorithm: str = "HS256",
     validators: dict[str, Callable[[Any], bool]] | None = None,
+    is_revoked: Callable[[str], bool] | None = None,
 ) -> dict[str, object]:
     """Verify a JWT token's signature and expiration.
 
@@ -99,6 +112,8 @@ def verify_token(
         validators: Optional mapping of claim names to validator functions.
             Each function receives the claim value and must return True for
             the token to be considered valid.
+        is_revoked: Optional callable that receives a ``jti`` string and returns
+            True if the token has been revoked.
 
     Returns:
         The decoded payload as a dictionary.
@@ -107,6 +122,7 @@ def verify_token(
         InvalidTokenError: If the token is malformed, the signature is invalid,
             or any custom validator fails.
         ExpiredTokenError: If the token has expired.
+        TokenRevokedError: If the token has been revoked according to ``is_revoked``.
         ValueError: If the algorithm is not supported.
     """
     if algorithm not in _ALGORITHMS:
@@ -135,6 +151,11 @@ def verify_token(
     exp = payload.get("exp")
     if exp is not None and isinstance(exp, (int, float)) and exp < time.time():
         raise ExpiredTokenError("Token has expired")
+
+    if is_revoked is not None:
+        jti = payload.get("jti")
+        if isinstance(jti, str) and is_revoked(jti):
+            raise TokenRevokedError("Token has been revoked")
 
     if validators is not None:
         for claim_name, validator_fn in validators.items():
@@ -203,3 +224,32 @@ def decode_token(token: str) -> dict[str, object]:
         raise InvalidTokenError("Invalid payload") from exc
 
     return payload
+
+
+def decode_unverified(token: str) -> tuple[dict[str, object], dict[str, object]]:
+    """Decode a JWT token's header and payload without signature validation.
+
+    Useful for inspecting token contents during debugging. The signature
+    is **not** checked, so the returned data must not be trusted for
+    authorization decisions.
+
+    Args:
+        token: The JWT string to decode.
+
+    Returns:
+        A tuple of ``(header, payload)`` dictionaries.
+
+    Raises:
+        InvalidTokenError: If the token is malformed.
+    """
+    parts = token.split(".")
+    if len(parts) != 3:
+        raise InvalidTokenError("Token must have three parts")
+
+    try:
+        header: dict[str, object] = json.loads(_b64url_decode(parts[0]))
+        payload: dict[str, object] = json.loads(_b64url_decode(parts[1]))
+    except (json.JSONDecodeError, Exception) as exc:
+        raise InvalidTokenError("Invalid token") from exc
+
+    return header, payload
