@@ -3,6 +3,7 @@
 [![Tests](https://github.com/philiprehberger/py-jwt-lite/actions/workflows/publish.yml/badge.svg)](https://github.com/philiprehberger/py-jwt-lite/actions/workflows/publish.yml)
 [![PyPI version](https://img.shields.io/pypi/v/philiprehberger-jwt-lite.svg)](https://pypi.org/project/philiprehberger-jwt-lite/)
 [![License](https://img.shields.io/github/license/philiprehberger/py-jwt-lite)](LICENSE)
+[![Sponsor](https://img.shields.io/badge/sponsor-GitHub%20Sponsors-ec6cb9)](https://github.com/sponsors/philiprehberger)
 
 Minimal JWT creation and validation with zero dependencies.
 
