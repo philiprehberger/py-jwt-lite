@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "philiprehberger-jwt-lite"
-version = "0.1.0"
+version = "0.2.0"
 description = "Minimal JWT creation and validation with zero dependencies."
 readme = "README.md"
 license = "MIT"

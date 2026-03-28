@@ -7,11 +7,13 @@ import hashlib
 import hmac
 import json
 import time
+from typing import Any, Callable
 
 __all__ = [
     "create_token",
     "verify_token",
     "decode_token",
+    "refresh_token",
     "ExpiredTokenError",
     "InvalidTokenError",
 ]
@@ -86,6 +88,7 @@ def verify_token(
     token: str,
     secret: str,
     algorithm: str = "HS256",
+    validators: dict[str, Callable[[Any], bool]] | None = None,
 ) -> dict[str, object]:
     """Verify a JWT token's signature and expiration.
 
@@ -93,12 +96,16 @@ def verify_token(
         token: The JWT string to verify.
         secret: Shared secret used for HMAC verification.
         algorithm: Expected signing algorithm.
+        validators: Optional mapping of claim names to validator functions.
+            Each function receives the claim value and must return True for
+            the token to be considered valid.
 
     Returns:
         The decoded payload as a dictionary.
 
     Raises:
-        InvalidTokenError: If the token is malformed or the signature is invalid.
+        InvalidTokenError: If the token is malformed, the signature is invalid,
+            or any custom validator fails.
         ExpiredTokenError: If the token has expired.
         ValueError: If the algorithm is not supported.
     """
@@ -129,7 +136,49 @@ def verify_token(
     if exp is not None and isinstance(exp, (int, float)) and exp < time.time():
         raise ExpiredTokenError("Token has expired")
 
+    if validators is not None:
+        for claim_name, validator_fn in validators.items():
+            claim_value = payload.get(claim_name)
+            if claim_value is None:
+                raise InvalidTokenError(
+                    f"Missing required claim: {claim_name}"
+                )
+            if not validator_fn(claim_value):
+                raise InvalidTokenError(
+                    f"Validation failed for claim: {claim_name}"
+                )
+
     return payload
+
+
+def refresh_token(
+    token: str,
+    secret: str,
+    extends_by: int = 3600,
+    algorithm: str = "HS256",
+) -> str:
+    """Refresh a JWT token by re-signing with a new expiration time.
+
+    The existing token is verified first, then a new token is created
+    with the same payload but a fresh ``exp`` claim.
+
+    Args:
+        token: The JWT string to refresh.
+        secret: Shared secret used for HMAC signing.
+        extends_by: New expiration time in seconds from now (default 3600).
+        algorithm: Signing algorithm (HS256, HS384, or HS512).
+
+    Returns:
+        A new signed JWT string with an updated expiration.
+
+    Raises:
+        InvalidTokenError: If the original token is invalid.
+        ExpiredTokenError: If the original token has expired.
+        ValueError: If the algorithm is not supported.
+    """
+    payload = verify_token(token, secret, algorithm=algorithm)
+    payload["exp"] = time.time() + extends_by
+    return create_token(payload, secret, algorithm=algorithm)
 
 
 def decode_token(token: str) -> dict[str, object]:
