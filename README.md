@@ -71,24 +71,54 @@ token = create_token({"sub": "user123"}, "my-secret", expires_in=3600)
 new_token = refresh_token(token, "my-secret", extends_by=7200)
 ```
 
+### JTI Auto-Generation
+
+```python
+from philiprehberger_jwt_lite import create_token, decode_token
+
+token = create_token({"sub": "user123"}, "my-secret", include_jti=True)
+payload = decode_token(token)
+print(payload["jti"])  # e.g. "a1b2c3d4-..."
+```
+
+### Token Revocation
+
+```python
+from philiprehberger_jwt_lite import create_token, verify_token, TokenRevokedError
+
+revoked: set[str] = set()
+token = create_token({"sub": "user123"}, "my-secret", include_jti=True)
+
+# Later, revoke the token by its jti
+# revoked.add(jti)
+
+try:
+    payload = verify_token(token, "my-secret", is_revoked=lambda jti: jti in revoked)
+except TokenRevokedError:
+    print("Token has been revoked")
+```
+
 ### Decode Without Verification
 
 ```python
-from philiprehberger_jwt_lite import decode_token
+from philiprehberger_jwt_lite import decode_unverified
 
-payload = decode_token(token)
+header, payload = decode_unverified(token)
+print(header["alg"])  # "HS256"
 ```
 
 ## API
 
 | Function / Class | Description |
 |------------------|-------------|
-| `create_token(payload, secret, algorithm, expires_in)` | Create a signed JWT token |
-| `verify_token(token, secret, algorithm, validators)` | Verify signature and expiration, run custom claim validators, return payload |
+| `create_token(payload, secret, algorithm, expires_in, include_jti)` | Create a signed JWT token |
+| `verify_token(token, secret, algorithm, validators, is_revoked)` | Verify signature and expiration, run custom claim validators, return payload |
 | `refresh_token(token, secret, extends_by, algorithm)` | Verify and re-sign a token with a new expiration |
 | `decode_token(token)` | Decode payload without signature verification |
+| `decode_unverified(token)` | Decode header and payload without signature validation |
 | `ExpiredTokenError` | Raised when a token's exp claim is in the past |
 | `InvalidTokenError` | Raised when a token is malformed or signature is invalid |
+| `TokenRevokedError` | Raised when a token has been revoked |
 
 ## Development
 
@@ -99,10 +129,10 @@ python -m pytest tests/ -v
 
 ## Support
 
-If you find this package useful, consider starring the repository.
+If you find this package useful, consider giving it a star on GitHub — it helps motivate continued maintenance and development.
 
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-Philip%20Rehberger-blue?logo=linkedin)](https://www.linkedin.com/in/philiprehberger/)
-[![More packages](https://img.shields.io/badge/More%20packages-philiprehberger-orange)](https://github.com/philiprehberger?tab=repositories)
+[![LinkedIn](https://img.shields.io/badge/Philip%20Rehberger-LinkedIn-0A66C2?logo=linkedin)](https://www.linkedin.com/in/philiprehberger)
+[![More packages](https://img.shields.io/badge/more-open%20source%20packages-blue)](https://philiprehberger.com/open-source-packages)
 
 ## License
 
