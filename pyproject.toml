@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "philiprehberger-jwt-lite"
-version = "0.3.1"
-description = "Minimal JWT creation and validation with zero dependencies."
+version = "0.4.0"
+description = "Minimal JWT creation and validation with HMAC and RSA signing."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
 authors = [{ name = "Philip Rehberger" }]
-keywords = ["jwt", "token", "authentication", "security", "hmac"]
+keywords = ["jwt", "token", "authentication", "security", "hmac", "rsa"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",

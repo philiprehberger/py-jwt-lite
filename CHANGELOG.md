@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0 (2026-04-01)
+
+- Add RS256 (RSA) algorithm support for token creation and verification
+- Add `decode_header()` function to inspect token headers without full validation
+- Add `JWKSet` class for managing multiple named signing keys (HMAC and RSA)
+- Add `ClaimValidationError` exception as a subclass of `InvalidTokenError` for claim validation failures
+- Update `create_token()` and `verify_token()` to accept PEM-encoded RSA keys
+- Update `description` in pyproject.toml to reflect RSA support
+
 ## 0.3.1 (2026-03-31)
 
 - Standardize README to 3-badge format with emoji Support section
