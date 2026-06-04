@@ -372,6 +372,7 @@ class JWKSet:
         token: str,
         validators: dict[str, Callable[[Any], bool]] | None = None,
         is_revoked: Callable[[str], bool] | None = None,
+        leeway: float = 0.0,
     ) -> dict[str, object]:
         """Verify a JWT using the ``kid`` in its header to find the key.
 
@@ -379,6 +380,8 @@ class JWKSet:
             token: The JWT string to verify.
             validators: Optional claim validators (see :func:`verify_token`).
             is_revoked: Optional revocation checker (see :func:`verify_token`).
+            leeway: Clock-skew tolerance in seconds applied to ``exp``,
+                ``nbf``, and ``iat``.
 
         Returns:
             The decoded payload as a dictionary.
@@ -386,8 +389,10 @@ class JWKSet:
         Raises:
             InvalidTokenError: If the token is malformed, has an unknown kid,
                 or the signature is invalid.
-            ExpiredTokenError: If the token has expired.
+            ExpiredTokenError: If the token has expired (accounting for leeway).
             TokenRevokedError: If the token has been revoked.
+            ClaimValidationError: If ``nbf`` / ``iat`` are still in the
+                future, or a custom validator fails.
         """
         header = decode_header(token)
         kid = header.get("kid")
@@ -458,9 +463,19 @@ class JWKSet:
 
         payload_data: dict[str, object] = json.loads(_b64url_decode(payload_b64))
 
+        now = time.time()
+
         exp = payload_data.get("exp")
-        if exp is not None and isinstance(exp, (int, float)) and exp < time.time():
+        if exp is not None and isinstance(exp, (int, float)) and exp + leeway < now:
             raise ExpiredTokenError("Token has expired")
+
+        nbf = payload_data.get("nbf")
+        if nbf is not None and isinstance(nbf, (int, float)) and nbf - leeway > now:
+            raise ClaimValidationError("Token is not yet valid (nbf)")
+
+        iat = payload_data.get("iat")
+        if iat is not None and isinstance(iat, (int, float)) and iat - leeway > now:
+            raise ClaimValidationError("Token issued in the future (iat)")
 
         if is_revoked is not None:
             jti = payload_data.get("jti")
@@ -547,8 +562,9 @@ def verify_token(
     algorithm: str = "HS256",
     validators: dict[str, Callable[[Any], bool]] | None = None,
     is_revoked: Callable[[str], bool] | None = None,
+    leeway: float = 0.0,
 ) -> dict[str, object]:
-    """Verify a JWT token's signature and expiration.
+    """Verify a JWT token's signature and time-based claims.
 
     Args:
         token: The JWT string to verify.
@@ -560,15 +576,19 @@ def verify_token(
             the token to be considered valid.
         is_revoked: Optional callable that receives a ``jti`` string and returns
             True if the token has been revoked.
+        leeway: Clock-skew tolerance in seconds applied to ``exp``, ``nbf``,
+            and ``iat`` validation. Useful when verifier and issuer clocks
+            drift apart. Defaults to ``0``.
 
     Returns:
         The decoded payload as a dictionary.
 
     Raises:
         InvalidTokenError: If the token is malformed or the signature is invalid.
-        ExpiredTokenError: If the token has expired.
+        ExpiredTokenError: If the token has expired (accounting for leeway).
         TokenRevokedError: If the token has been revoked according to ``is_revoked``.
-        ClaimValidationError: If any custom validator fails.
+        ClaimValidationError: If a custom validator fails, or if ``nbf``/``iat``
+            indicate the token is not yet valid (accounting for leeway).
         ValueError: If the algorithm is not supported.
     """
     if algorithm not in _ALL_ALGORITHMS:
@@ -603,9 +623,19 @@ def verify_token(
 
     payload: dict[str, object] = json.loads(_b64url_decode(payload_b64))
 
+    now = time.time()
+
     exp = payload.get("exp")
-    if exp is not None and isinstance(exp, (int, float)) and exp < time.time():
+    if exp is not None and isinstance(exp, (int, float)) and exp + leeway < now:
         raise ExpiredTokenError("Token has expired")
+
+    nbf = payload.get("nbf")
+    if nbf is not None and isinstance(nbf, (int, float)) and nbf - leeway > now:
+        raise ClaimValidationError("Token is not yet valid (nbf)")
+
+    iat = payload.get("iat")
+    if iat is not None and isinstance(iat, (int, float)) and iat - leeway > now:
+        raise ClaimValidationError("Token issued in the future (iat)")
 
     if is_revoked is not None:
         jti = payload.get("jti")

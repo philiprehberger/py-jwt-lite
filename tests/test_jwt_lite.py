@@ -652,3 +652,51 @@ def test_jwkset_include_jti() -> None:
 
     assert "jti" in payload
     uuid.UUID(str(payload["jti"]), version=4)
+
+
+# leeway and nbf / iat validation
+
+
+def test_verify_token_leeway_tolerates_slightly_expired() -> None:
+    import time
+    from philiprehberger_jwt_lite import create_token, verify_token
+
+    secret = "k"
+    expired = create_token({"sub": "u"}, secret, expires_in=-2)  # exp 2s ago
+    # Without leeway, this raises ExpiredTokenError; with leeway >= 2s it passes.
+    payload = verify_token(expired, secret, leeway=5)
+    assert payload["sub"] == "u"
+
+
+def test_verify_token_nbf_future_raises_claim_validation() -> None:
+    import time
+    import pytest
+    from philiprehberger_jwt_lite import create_token, verify_token, ClaimValidationError
+
+    secret = "k"
+    future_nbf = time.time() + 60
+    token = create_token({"sub": "u", "nbf": future_nbf}, secret)
+    with pytest.raises(ClaimValidationError):
+        verify_token(token, secret)
+
+
+def test_verify_token_nbf_passes_with_leeway() -> None:
+    import time
+    from philiprehberger_jwt_lite import create_token, verify_token
+
+    secret = "k"
+    near_future_nbf = time.time() + 3
+    token = create_token({"sub": "u", "nbf": near_future_nbf}, secret)
+    payload = verify_token(token, secret, leeway=10)
+    assert payload["sub"] == "u"
+
+
+def test_verify_token_iat_in_future_raises() -> None:
+    import time
+    import pytest
+    from philiprehberger_jwt_lite import create_token, verify_token, ClaimValidationError
+
+    secret = "k"
+    token = create_token({"sub": "u", "iat": time.time() + 60}, secret)
+    with pytest.raises(ClaimValidationError):
+        verify_token(token, secret)

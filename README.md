@@ -4,6 +4,8 @@
 [![PyPI version](https://img.shields.io/pypi/v/philiprehberger-jwt-lite.svg)](https://pypi.org/project/philiprehberger-jwt-lite/)
 [![Last updated](https://img.shields.io/github/last-commit/philiprehberger/py-jwt-lite)](https://github.com/philiprehberger/py-jwt-lite/commits/main)
 
+![philiprehberger-jwt-lite](https://raw.githubusercontent.com/philiprehberger/py-jwt-lite/main/package-card.webp)
+
 Minimal JWT creation and validation with HMAC and RSA signing.
 
 ## Installation
@@ -133,12 +135,29 @@ token = jwks.create_token({"sub": "user123"}, "hmac-1", expires_in=3600)
 payload = jwks.verify_token(token)
 ```
 
+### Clock-skew leeway with `nbf` and `iat`
+
+```python
+import time
+from philiprehberger_jwt_lite import create_token, verify_token
+
+token = create_token(
+    {"sub": "user123", "nbf": time.time() + 5, "iat": time.time()},
+    "my-secret",
+    expires_in=3600,
+)
+
+# Without leeway, verification fails because nbf is in the future.
+# 30s of tolerance is plenty for typical NTP-drift between servers.
+payload = verify_token(token, "my-secret", leeway=30)
+```
+
 ## API
 
 | Function / Class | Description |
 |------------------|-------------|
 | `create_token(payload, secret, algorithm, expires_in, include_jti)` | Create a signed JWT token (HS256, HS384, HS512, RS256) |
-| `verify_token(token, secret, algorithm, validators, is_revoked)` | Verify signature and expiration, run custom claim validators, return payload |
+| `verify_token(token, secret, algorithm, validators, is_revoked, leeway)` | Verify signature and time claims (`exp` / `nbf` / `iat` honoring `leeway`), run custom validators, return payload |
 | `refresh_token(token, secret, extends_by, algorithm)` | Verify and re-sign a token with a new expiration |
 | `decode_token(token)` | Decode payload without signature verification |
 | `decode_header(token)` | Decode header without signature verification |
@@ -147,7 +166,7 @@ payload = jwks.verify_token(token)
 | `JWKSet.add_hmac_key(kid, secret, algorithm)` | Register an HMAC key in the set |
 | `JWKSet.add_rsa_key(kid, private_pem, public_pem, algorithm)` | Register an RSA key pair in the set |
 | `JWKSet.create_token(payload, kid, expires_in, include_jti)` | Create a token signed with a key from the set |
-| `JWKSet.verify_token(token, validators, is_revoked)` | Verify a token using the kid in its header |
+| `JWKSet.verify_token(token, validators, is_revoked, leeway)` | Verify a token using the kid in its header (supports `leeway` for `exp` / `nbf` / `iat`) |
 | `ExpiredTokenError` | Raised when a token's exp claim is in the past |
 | `InvalidTokenError` | Raised when a token is malformed or signature is invalid |
 | `ClaimValidationError` | Raised when a custom claim validator fails (subclass of InvalidTokenError) |

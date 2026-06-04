@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0 (2026-06-04)
+
+- Add `leeway` parameter (default `0`) to `verify_token()` and `JWKSet.verify_token()` for clock-skew tolerance on time claims
+- Validate `nbf` (not-before) and `iat` (issued-at) claims — `ClaimValidationError` is raised if either is in the future beyond the configured leeway
+- Add `package-card.webp` to README
+
 ## 0.4.0 (2026-04-01)
 
 - Add RS256 (RSA) algorithm support for token creation and verification
